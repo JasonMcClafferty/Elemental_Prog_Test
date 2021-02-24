@@ -1,4 +1,4 @@
-import java.io.IOException;
+import java.io.*;
 import java.net.URI;
 import java.net.http.*;
 import java.util.*;
@@ -34,17 +34,107 @@ class Result {
 
         */
 
+        String apiURI = "http://elemental.kieda.com/api/article_users/search?page=1";
+        List<String> allAuthors;
 
+        String response = getPage1UsersFromAPI(apiURI);
+        allAuthors = Arrays.asList(response.split("id"));             // splitting up the json response string into individual units of relevance: users.
 
+        // Extract usernames & submissions
+        // Sort and Filter users by submission count
+        usernames = extractAndSortFields(allAuthors, threshold);
 
         return usernames;
+    }
+    public static String getPage1UsersFromAPI(String api) throws IOException, InterruptedException {
+        int totalPages;
+        String allData = "";
+
+        // Setting up a http connection
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(api))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        allData += response.body();
+
+        // print http status code
+        System.out.print("HTTP request/response status:" + response.statusCode() +"\n");
+
+
+        // can be wrapped in a method
+        totalPages = Integer.parseInt(regexCheck("\\btotal_pages.+?\\b.+?\\b", response.body())
+                                .replace("total_pages:", ""));
+        System.out.print("Total Pages: " + totalPages + "\n");
+
+
+
+        // here is where we:
+        // a) Get the second page of results
+        // b) append those results to my output string to be parsed
+
+        for (int i = 2; i <= totalPages; i++) {
+            String next_api = api.replace("page=1", "page=" + i);
+            HttpRequest next_request = HttpRequest.newBuilder()
+                    .uri(URI.create(next_api))
+                    .build();
+            HttpResponse<String> next_response = client.send(next_request, HttpResponse.BodyHandlers.ofString());
+
+            allData = allData + next_response.body();
+
+            }
+
+        return allData;
+    }
+    public static ArrayList<String> extractAndSortFields(List<String> listOfAllAuthors, int threshold) {
+        Map<String, String> authorComparator = new LinkedHashMap<String, String>();
+        ArrayList<String> authorsOverThreshold = new ArrayList<String>();
+
+        for(String authorEntry : listOfAllAuthors) {
+
+            String username= regexCheck("\\busername.+?\\b.+?\\b", authorEntry)                 // Extract the username field from the response string
+                    .replace("username:", "");                                  // Extract the username from the username field.
+
+            String submitted = regexCheck("\\bsubmitted.+?\\b.+?\\b", authorEntry)              // Extract the submitted field from response string
+                    .replace("submitted:", "");                                 // Extract the submitted number from the submitted field.
+
+
+            // add usernames if username isn't null and submission count is greater than the threshold (hardcoded as 10)
+            if(username.length() > 0 && Integer.parseInt(submitted) > threshold) {
+                authorComparator.put(username, submitted);
+            }
+        }
+
+        authorsOverThreshold.addAll(authorComparator.keySet());          // Reformatting the data structure & extracting author names assuming my sort works
+
+        return authorsOverThreshold;
+    }
+    public static String regexCheck(String myRegexPattern, String stringToCheck) {
+        String result = "";
+
+        Pattern myPattern = Pattern.compile(myRegexPattern);
+        Matcher myMatcher = myPattern.matcher(stringToCheck);
+
+        //System.out.println("regexCheck");
+
+        // if there is a non-null result, print it to system out.
+        while (myMatcher.find()) {
+            if (myMatcher.group().length() != 0){
+                result = myMatcher.group().trim();
+            }
+        }
+
+        result = result.replace("\"", "");
+        //System.out.println(result);
+
+        return result;
     }
 }
 
 class Solution {
-    public static void main(String[] args ) {
-       /* BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(System.in));
-        BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter("result.txt"));
+    public static void main(String[] args ) throws Exception {
+       BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(System.in));
+       BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter("result.txt"));
 
         int threshold = Integer.parseInt(bufferedReader.readLine().trim());
 
@@ -57,7 +147,7 @@ class Solution {
         );
         bufferedReader.close();
         bufferedWriter.close();
-        */
+
 
         //System.out.println(response.body());
 
@@ -77,91 +167,16 @@ class Solution {
         //      Save the data in a variable
 
 
-        try {
-            System.out.print(endToEnd());
+       /* try {
+            System.out.println(Result.getUsernames(10));
         } catch (IOException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
             e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
-
+        */
     }
-
-    public static List<String> endToEnd () throws IOException, InterruptedException {
-        String apiURI = "http://elemental.kieda.com/api/article_users/search?page=1";
-        List<String> allAuthors;
-        int threshold = 10;
-
-
-        HttpResponse<String> response = getPage1UsersFromAPI(apiURI);
-        allAuthors = Arrays.asList(response.body().split("id"));             // splitting up the json response string into individual units of relevance: users.
-
-        // Extract usernames & submissions
-        // Sort and Filter users by submission count
-        return extractAndSortFields(allAuthors, threshold);
-    }
-
-    public static HttpResponse<String> getPage1UsersFromAPI(String api) throws IOException, InterruptedException {
-        // Setting up a http connection
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(api))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-
-        // print http status
-        System.out.print("HTTP request/response status:" + response.statusCode());
-
-        return response;
-
-    }
-
-
-    public static ArrayList<String> extractAndSortFields(List<String> listOfAllAuthors, int threshold) {
-        Map<String, String> authorComparator = new LinkedHashMap<String, String>();
-        ArrayList<String> authorsOverThreshold = new ArrayList<String>();
-
-        for(String authorEntry : listOfAllAuthors) {
-
-            String username= regexCheck("\\busername.+?\\b.+?\\b", authorEntry)                 // Extract the username field from the response string
-                                .replace("username:", "");                                  // Extract the username from the username field.
-
-            String submitted = regexCheck("\\bsubmitted.+?\\b.+?\\b", authorEntry)              // Extract the submitted field from response string
-                                .replace("submitted:", "");                                 // Extract the submitted number from the submitted field.
-
-
-            // add usernames if username isn't null and submission count is greater than the threshold (hardcoded as 10)
-            if(username.length() > 0 && Integer.parseInt(submitted) > threshold) {
-                authorComparator.put(username, submitted);
-            }
-        }
-
-        authorsOverThreshold.addAll(authorComparator.keySet());          // Reformatting the data structure & extracting author names assuming my sort works
-
-        return authorsOverThreshold;
-    }
-
-    public static String regexCheck(String myRegexPattern, String stringToCheck) {
-        String result = "";
-
-        Pattern myPattern = Pattern.compile(myRegexPattern);
-        Matcher myMatcher = myPattern.matcher(stringToCheck);
-
-        //System.out.println("regexCheck");
-
-        // if there is a non-null result, print it to system out.
-        while (myMatcher.find()) {
-            if (myMatcher.group().length() != 0){
-                result = myMatcher.group().trim();
-            }
-        }
-
-        result = result.replace("\"", "");
-        System.out.println(result);
-
-        return result;
-    }
-
 }
