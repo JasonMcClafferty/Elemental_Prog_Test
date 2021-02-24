@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.URI;
 import java.net.http.*;
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,13 +55,12 @@ class Result {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(api))
+                .timeout(Duration.ofSeconds(20))
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         allData += response.body();
 
-        // print http status code
         System.out.print("HTTP request/response status:" + response.statusCode() +"\n");
-
 
         // can be wrapped in a method
         totalPages = Integer.parseInt(regexCheck("\\btotal_pages.+?\\b.+?\\b", response.body())
@@ -72,15 +72,16 @@ class Result {
         // here is where we:
         // a) Get the second page of results
         // b) append those results to my output string to be parsed
-
+        // Second time doing this, it could be refactored into a me thod
         for (int i = 2; i <= totalPages; i++) {
             String next_api = api.replace("page=1", "page=" + i);
             HttpRequest next_request = HttpRequest.newBuilder()
                     .uri(URI.create(next_api))
+                    .timeout(Duration.ofSeconds(20))
                     .build();
             HttpResponse<String> next_response = client.send(next_request, HttpResponse.BodyHandlers.ofString());
 
-            allData = allData + next_response.body();
+            allData += next_response.body();
 
             }
 
@@ -95,8 +96,8 @@ class Result {
             String username= regexCheck("\\busername.+?\\b.+?\\b", authorEntry)                 // Extract the username field from the response string
                     .replace("username:", "");                                  // Extract the username from the username field.
 
-            String submitted = regexCheck("\\bsubmitted.+?\\b.+?\\b", authorEntry)              // Extract the submitted field from response string
-                    .replace("submitted:", "");                                 // Extract the submitted number from the submitted field.
+            String submitted = regexCheck("\\bsubmission_count.+?\\b.+?\\b", authorEntry)              // Extract the submitted field from response string
+                    .replace("submission_count:", "");                                 // Extract the submitted number from the submitted field.
 
 
             // add usernames if username isn't null and submission count is greater than the threshold (hardcoded as 10)
@@ -147,36 +148,5 @@ class Solution {
         );
         bufferedReader.close();
         bufferedWriter.close();
-
-
-        //System.out.println(response.body());
-
-        // The data field holds the author records, this needs split up into comparable authors
-        // The total_pages field tells me how many times I need to run a request and create objects
-        // If I boil that down into a high level algorithm it's something like:
-        //
-        //      while requests made <= total_pages (use a for loop to track the page number) :
-        //          Request the data
-        //          parse the data into relevant comparable objects at the required scope
-        //          sort the objects into the list I need based on the threshold number
-        //
-        // This will need to be tested, refined, refactored etc. but lets get an alpha first.
-
-        //  Step 1: Request the Data
-        //      Need a connection the the API endpoint - Setup
-        //      Save the data in a variable
-
-
-       /* try {
-            System.out.println(Result.getUsernames(10));
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        */
     }
 }
