@@ -36,20 +36,24 @@ class Result {
         */
 
         String apiURI = "http://elemental.kieda.com/api/article_users/search?page=1";
-        List<String> allAuthors;
+        List<String> allUsersAsList;
 
-        String response = getPage1UsersFromAPI(apiURI);
-        allAuthors = Arrays.asList(response.split("id"));             // splitting up the json response string into individual units of relevance: users.
+        // get all users from the API endpoint.
+        // split the all users string into individual user strings
+        // add individual user strings to allUsers
+        allUsersAsList = Arrays.asList(getAllUsersFromAPI(apiURI).split("id"));
+
 
         // Extract usernames & submissions
         // Sort and Filter users by submission count
-        usernames = extractAndSortFields(allAuthors, threshold);
+        usernames = extractAndSortFields(allUsersAsList, threshold);
 
         return usernames;
     }
-    public static String getPage1UsersFromAPI(String api) throws IOException, InterruptedException {
+
+    public static String getAllUsersFromAPI(String api) throws IOException, InterruptedException {
         int totalPages;
-        String allData = "";
+        String allUserData = "";
 
         // Setting up a http connection
         HttpClient client = HttpClient.newHttpClient();
@@ -57,58 +61,55 @@ class Result {
                 .uri(URI.create(api))
                 .timeout(Duration.ofSeconds(20))
                 .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        allData += response.body();
 
-        System.out.print("HTTP request/response status:" + response.statusCode() +"\n");
+        // send a get request(default) and add the response body to String allUserData
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        allUserData += response.body();
 
         // can be wrapped in a method
         totalPages = Integer.parseInt(regexCheck("\\btotal_pages.+?\\b.+?\\b", response.body())
                                 .replace("total_pages:", ""));
-        System.out.print("Total Pages: " + totalPages + "\n");
 
 
-
-        // here is where we:
-        // a) Get the second page of results
-        // b) append those results to my output string to be parsed
-        // Second time doing this, it could be refactored into a me thod
+        // Get each of the next pages of users
+        // Append those results to String allUserData
         for (int i = 2; i <= totalPages; i++) {
             String next_api = api.replace("page=1", "page=" + i);
+
             HttpRequest next_request = HttpRequest.newBuilder()
                     .uri(URI.create(next_api))
                     .timeout(Duration.ofSeconds(20))
                     .build();
+
             HttpResponse<String> next_response = client.send(next_request, HttpResponse.BodyHandlers.ofString());
+            allUserData += next_response.body();
+        }
 
-            allData += next_response.body();
-
-            }
-
-        return allData;
+        return allUserData;
     }
+
     public static ArrayList<String> extractAndSortFields(List<String> listOfAllAuthors, int threshold) {
-        Map<String, String> authorComparator = new LinkedHashMap<String, String>();
-        ArrayList<String> authorsOverThreshold = new ArrayList<String>();
+        Map<String, String> userSubmissionCount = new LinkedHashMap<String, String>();
+        ArrayList<String> usersOverThreshold = new ArrayList<String>();
 
-        for(String authorEntry : listOfAllAuthors) {
+        for(String userEntry : listOfAllAuthors) {
 
-            String username= regexCheck("\\busername.+?\\b.+?\\b", authorEntry)                 // Extract the username field from the response string
-                    .replace("username:", "");                                  // Extract the username from the username field.
+            String username= regexCheck("\\busername.+?\\b.+?\\b", userEntry)            // Extract the username field from the response string
+                    .replace("username:", "");                                         // Extract the username from the username field.
 
-            String submitted = regexCheck("\\bsubmission_count.+?\\b.+?\\b", authorEntry)              // Extract the submitted field from response string
+            String submitted = regexCheck("\\bsubmission_count.+?\\b.+?\\b", userEntry)  // Extract the submitted field from response string
                     .replace("submission_count:", "");                                 // Extract the submitted number from the submitted field.
 
 
             // add usernames if username isn't null and submission count is greater than the threshold (hardcoded as 10)
             if(username.length() > 0 && Integer.parseInt(submitted) > threshold) {
-                authorComparator.put(username, submitted);
+                userSubmissionCount.put(username, submitted);
             }
         }
 
-        authorsOverThreshold.addAll(authorComparator.keySet());          // Reformatting the data structure & extracting author names assuming my sort works
+        usersOverThreshold.addAll(userSubmissionCount.keySet());          // Reformatting the data structure & extracting author names assuming my sort works
 
-        return authorsOverThreshold;
+        return usersOverThreshold;
     }
     public static String regexCheck(String myRegexPattern, String stringToCheck) {
         String result = "";
