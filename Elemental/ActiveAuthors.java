@@ -17,12 +17,6 @@ class Result {
 
 
 
-    public void getPage() {}
-
-    public void getAllPages() {}
-
-
-
     public static List<String> getUsernames(int threshold) throws Exception{
         List<String> usernames = new ArrayList<>();
         /*
@@ -39,6 +33,8 @@ class Result {
         - call rest get for page 2, 3, and so on and constantly add names to the list of usernames
 
         */
+
+
 
 
         return usernames;
@@ -82,7 +78,7 @@ class Solution {
 
 
         try {
-            System.out.print(setupHttpClient());
+            System.out.print(endToEnd());
         } catch (IOException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
@@ -92,51 +88,57 @@ class Solution {
 
     }
 
-    public static List<String> setupHttpClient () throws IOException, InterruptedException {
-        String api = "http://elemental.kieda.com/api/article_users/search?page=1";
+    public static List<String> endToEnd () throws IOException, InterruptedException {
+        String apiURI = "http://elemental.kieda.com/api/article_users/search?page=1";
         List<String> allAuthors;
-        ArrayList<String> authorsOverThreshold = new ArrayList<String>();
+        int threshold = 10;
 
-        // LinkedHashMap for predictable iteration order
-        Map<String, String> authorComparator = new LinkedHashMap<String, String>();
+
+        HttpResponse<String> response = getPage1UsersFromAPI(apiURI);
+        allAuthors = Arrays.asList(response.body().split("id"));             // splitting up the json response string into individual units of relevance: users.
+
+        // Extract usernames & submissions
+        // Sort and Filter users by submission count
+        return extractAndSortFields(allAuthors, threshold);
+    }
+
+    public static HttpResponse<String> getPage1UsersFromAPI(String api) throws IOException, InterruptedException {
+        // Setting up a http connection
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(api))
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        System.out.print(response.statusCode());
-        allAuthors = Arrays.asList(response.body().split("id"));
+
+        // print http status
+        System.out.print("HTTP request/response status:" + response.statusCode());
+
+        return response;
+
+    }
 
 
-        for(String authorEntry : allAuthors) {
+    public static ArrayList<String> extractAndSortFields(List<String> listOfAllAuthors, int threshold) {
+        Map<String, String> authorComparator = new LinkedHashMap<String, String>();
+        ArrayList<String> authorsOverThreshold = new ArrayList<String>();
 
-            System.out.println("\n");
-           // System.out.println("\"id" + authorEntry);
+        for(String authorEntry : listOfAllAuthors) {
 
-            //List<String> authorEntryDecomposedIntoKeyValPairs = Arrays.asList(authorEntry.split(","));
-            // System.out.println(authorEntryDecomposedIntoKeyValPairs);
+            String username= regexCheck("\\busername.+?\\b.+?\\b", authorEntry)                 // Extract the username field from the response string
+                                .replace("username:", "");                                  // Extract the username from the username field.
 
-            //check for empty entries below
-            String username= regexCheck("\\busername.+?\\b.+?\\b", authorEntry);
+            String submitted = regexCheck("\\bsubmitted.+?\\b.+?\\b", authorEntry)              // Extract the submitted field from response string
+                                .replace("submitted:", "");                                 // Extract the submitted number from the submitted field.
 
-            username = username.replace("username:", "");
-
-
-            // this regex goes to the start of the next word it seems, I need to use a slightly different regex to take the number, not the next word border
-            String submitted = regexCheck("\\bsubmitted.+?\\b.+?\\b", authorEntry);
-
-            submitted = submitted.replace("submitted:", "");
 
             // add usernames if username isn't null and submission count is greater than the threshold (hardcoded as 10)
-            if(username.length() > 0 && Integer.parseInt(submitted) > 10) {
+            if(username.length() > 0 && Integer.parseInt(submitted) > threshold) {
                 authorComparator.put(username, submitted);
             }
         }
 
-        System.out.println(authorComparator.toString());
-
-        authorsOverThreshold.addAll(authorComparator.keySet());
+        authorsOverThreshold.addAll(authorComparator.keySet());          // Reformatting the data structure & extracting author names assuming my sort works
 
         return authorsOverThreshold;
     }
